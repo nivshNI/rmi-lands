@@ -1,0 +1,46 @@
+name: RMI Tender Monitor
+
+on:
+  schedule:
+    - cron: '0 */3 * * *'  # Every 3 hours
+  workflow_dispatch:         # Manual trigger button
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Restore previous snapshot
+        uses: actions/cache@v4
+        with:
+          path: |
+            .last_snapshot.json
+            .yeshuv_cache.json
+          key: rmi-snapshot-${{ github.ref }}
+          restore-keys: rmi-snapshot-
+
+      - name: Run monitor
+        env:
+          NOTIFY_VIA: telegram
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          RMI_UCHLUSIYA: ${{ secrets.RMI_UCHLUSIYA }}
+        run: python main.py
+
+      - name: Save snapshot for next run
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            .last_snapshot.json
+            .yeshuv_cache.json
+          key: rmi-snapshot-${{ github.ref }}-${{ github.run_id }}

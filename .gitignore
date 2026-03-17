@@ -1,0 +1,9 @@
+.env
+.last_snapshot.json
+.yeshuv_cache.json
+monitor.log
+__pycache__/
+*.pyc
+.venv/
+_explore*
+_screenshot*
