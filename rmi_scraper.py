@@ -59,7 +59,7 @@ def _ensure_yeshuv_cache() -> None:
             pass
 
     try:
-        resp = httpx.get(f"{BASE_URL}/YeshuvimApi/Get", timeout=30)
+        resp = httpx.get(f"{BASE_URL}/YeshuvimApi/Get", timeout=60)
         resp.raise_for_status()
         for item in resp.json():
             code = item.get("mtysvSemelYishuv")
@@ -95,7 +95,7 @@ def fetch_tenders(uchlusiya_codes: Optional[list] = None) -> list:
         payload["Uchlusiya"] = uchlusiya_codes
 
     logger.info("Searching RMI tenders with payload: %s", payload)
-    resp = httpx.post(f"{BASE_URL}/SearchApi/Search", json=payload, timeout=30)
+    resp = httpx.post(f"{BASE_URL}/SearchApi/Search", json=payload, timeout=60)
     resp.raise_for_status()
     raw_tenders = resp.json()
     logger.info("Got %d raw tenders from API", len(raw_tenders))
