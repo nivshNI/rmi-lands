@@ -23,7 +23,8 @@ from notifier import notify
 from rmi_scraper import tender_key
 from summarizer import build_notification
 
-SNAPSHOT_FILE = Path(__file__).parent / ".last_snapshot.json"
+# Stored in repo so baseline persists reliably across runs (no cache)
+BASELINE_FILE = Path(__file__).parent / "baseline.json"
 
 logging.basicConfig(
     level=logging.INFO,
@@ -33,10 +34,10 @@ logger = logging.getLogger("rmi_lands")
 
 
 def load_previous_snapshot() -> Optional[Snapshot]:
-    if not SNAPSHOT_FILE.exists():
+    if not BASELINE_FILE.exists():
         return None
     try:
-        data = json.loads(SNAPSHOT_FILE.read_text())
+        data = json.loads(BASELINE_FILE.read_text())
         tenders = data.get("tenders", [])
         return Snapshot(tenders=tenders)
     except (json.JSONDecodeError, KeyError):
@@ -46,7 +47,7 @@ def load_previous_snapshot() -> Optional[Snapshot]:
 
 def save_snapshot(snap: Snapshot) -> None:
     data = {"tenders": snap.tenders}
-    SNAPSHOT_FILE.write_text(json.dumps(data, ensure_ascii=False))
+    BASELINE_FILE.write_text(json.dumps(data, ensure_ascii=False))
 
 
 def check_once() -> bool:
