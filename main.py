@@ -20,7 +20,6 @@ from typing import Optional
 from config import Config
 from monitor import Snapshot, diff_snapshots, take_snapshot
 from notifier import notify
-from rmi_scraper import tender_key
 from summarizer import build_notification
 
 # Stored in repo so baseline persists reliably across runs (no cache)
