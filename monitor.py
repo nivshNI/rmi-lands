@@ -9,6 +9,7 @@ from dataclasses import dataclass, field
 
 from config import Config
 from rmi_scraper import fetch_tenders, tender_key
+from watchlist import diff_tender
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +29,7 @@ def take_snapshot() -> Snapshot:
     return Snapshot(tenders=tenders)
 
 
-def diff_snapshots(old: Snapshot, new: Snapshot) -> dict:
+def diff_snapshots(old: Snapshot, new: Snapshot, watched_ids: set[str] | None = None) -> dict:
     new_ids = new.tender_ids - old.tender_ids
     removed_ids = old.tender_ids - new.tender_ids
 
@@ -38,6 +39,30 @@ def diff_snapshots(old: Snapshot, new: Snapshot) -> dict:
     return {
         "added": added,
         "removed_ids": removed_ids_list,
+        "updated": _updated_watched(old, new, watched_ids or set()),
+        "watched_removed": [i for i in removed_ids_list if i in (watched_ids or set())],
         "total_before": len(old.tender_ids),
         "total_after": len(new.tender_ids),
     }
+
+
+def _updated_watched(old: Snapshot, new: Snapshot, watched_ids: set[str]) -> list[dict]:
+    """Field-level changes on starred tenders that exist in both snapshots."""
+    if not watched_ids:
+        return []
+
+    old_by_id = {tender_key(t): t for t in old.tenders}
+    updates = []
+
+    for tender in new.tenders:
+        key = tender_key(tender)
+        if key not in watched_ids:
+            continue
+        previous = old_by_id.get(key)
+        if previous is None:
+            continue
+        changes = diff_tender(previous, tender)
+        if changes:
+            updates.append({"tender": tender, "changes": changes})
+
+    return updates
