@@ -1,0 +1,753 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>מפת מכרזי רמ"י</title>
+<link rel="stylesheet" href="vendor/leaflet.css">
+<style>
+  :root {
+    color-scheme: light;
+    --surface-1: #fcfcfb;
+    --page: #f9f9f7;
+    --text-primary: #0b0b0b;
+    --text-secondary: #52514e;
+    --muted: #898781;
+    --border: rgba(11, 11, 11, 0.10);
+    --gridline: #e1e0d9;
+    --s1:#dd9d23; --s2:#5c821e; --s3:#3a1fec; --s4:#9568c8;
+    --s5:#ff4b7a; --s6:#05b7e0; --s7:#a31441;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) {
+      color-scheme: dark;
+      --surface-1: #1a1a19;
+      --page: #0d0d0d;
+      --text-primary: #ffffff;
+      --text-secondary: #c3c2b7;
+      --muted: #898781;
+      --border: rgba(255, 255, 255, 0.10);
+      --gridline: #2c2c2a;
+      --s1:#bb8526; --s2:#54700b; --s3:#5a55cd; --s4:#bc53ff;
+      --s5:#993a5d; --s6:#2e9bc9; --s7:#eb5487;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --surface-1: #1a1a19;
+    --page: #0d0d0d;
+    --text-primary: #ffffff;
+    --text-secondary: #c3c2b7;
+    --muted: #898781;
+    --border: rgba(255, 255, 255, 0.10);
+    --gridline: #2c2c2a;
+    --s1:#bb8526; --s2:#54700b; --s3:#5a55cd; --s4:#bc53ff;
+    --s5:#993a5d; --s6:#2e9bc9; --s7:#eb5487;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    background: var(--page);
+    color: var(--text-primary);
+    display: flex;
+    flex-direction: column;
+  }
+
+  header {
+    padding: 14px 18px 0;
+    background: var(--surface-1);
+    border-bottom: 1px solid var(--border);
+  }
+  .titlebar {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  h1 { font-size: 19px; margin: 0; font-weight: 650; }
+  .meta { font-size: 13px; color: var(--text-secondary); }
+  .meta b { font-variant-numeric: tabular-nums; color: var(--text-primary); font-weight: 600; }
+
+  .controls {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+    padding: 12px 0 6px;
+  }
+  input[type="search"], select {
+    font: inherit;
+    font-size: 13px;
+    padding: 6px 10px;
+    border-radius: 7px;
+    border: 1px solid var(--border);
+    background: var(--page);
+    color: var(--text-primary);
+    min-width: 150px;
+  }
+  .btn {
+    font: inherit;
+    font-size: 13px;
+    padding: 6px 12px;
+    border-radius: 7px;
+    border: 1px solid var(--border);
+    background: var(--page);
+    color: var(--text-secondary);
+    cursor: pointer;
+  }
+  .btn:hover { color: var(--text-primary); }
+  .btn[aria-pressed="true"] { color: var(--text-primary); border-color: var(--muted); }
+
+  /* Multi-select popover (ייעוד has ~19 values — too many for a chip row) */
+  .ms { position: relative; }
+  .ms > summary {
+    list-style: none;
+    font-size: 13px;
+    padding: 6px 10px;
+    border-radius: 7px;
+    border: 1px solid var(--border);
+    background: var(--page);
+    color: var(--text-primary);
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+  }
+  .ms > summary::-webkit-details-marker { display: none; }
+  .ms > summary::after { content: " ▾"; color: var(--muted); }
+  .ms[open] > summary { border-color: var(--muted); }
+  .ms-panel {
+    position: absolute;
+    z-index: 1200;
+    top: calc(100% + 5px);
+    inset-inline-start: 0;
+    width: 285px;
+    max-height: 320px;
+    overflow: auto;
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    box-shadow: 0 8px 26px rgba(0,0,0,.18);
+    padding: 6px;
+  }
+  .ms-panel label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    padding: 6px 8px;
+    border-radius: 6px;
+    cursor: pointer;
+    color: var(--text-secondary);
+  }
+  .ms-panel label:hover { background: var(--page); color: var(--text-primary); }
+  .ms-panel .n { margin-inline-start: auto; font-variant-numeric: tabular-nums; color: var(--muted); font-size: 12px; }
+  .ms-actions {
+    display: flex; gap: 6px;
+    padding: 6px 8px;
+    border-top: 1px solid var(--gridline);
+    margin-top: 4px;
+  }
+  .ms-actions button {
+    font: inherit; font-size: 12px;
+    background: none; border: none; padding: 2px 6px;
+    color: var(--text-secondary); cursor: pointer; border-radius: 5px;
+  }
+  .ms-actions button:hover { color: var(--text-primary); background: var(--page); }
+
+  .legend {
+    display: flex;
+    gap: 7px;
+    flex-wrap: wrap;
+    padding: 4px 0 14px;
+    align-items: center;
+  }
+  .legend-label { font-size: 12px; color: var(--muted); margin-inline-end: 2px; }
+
+  /* An off toggle is not a deselected category — don't dim it like one. */
+  .chip.star[aria-pressed="false"] { opacity: 1; }
+  .chip.star[aria-pressed="true"] { border-color: var(--muted); color: var(--text-primary); }
+
+  /* Local stars live in the browser; the monitor reads watchlist.json in the
+     repo. This bar appears when the two have drifted apart. */
+  .syncbar {
+    display: none;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    font-size: 13px;
+    padding: 9px 12px;
+    margin: 0 0 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--page);
+    color: var(--text-secondary);
+  }
+  body.stars-dirty .syncbar { display: flex; }
+  .syncbar b { color: var(--text-primary); }
+  .syncbar .grow { flex: 1; }
+
+  .popup-actions { display: flex; gap: 8px; margin-top: 10px; }
+  .leaflet-popup-content-wrapper {
+    background: var(--surface-1);
+    color: var(--text-primary);
+    border-radius: 9px;
+    direction: rtl;
+    text-align: right;
+  }
+  .leaflet-popup-content { margin: 12px 14px; font-family: inherit; font-size: 13px; width: 250px !important; }
+  .leaflet-popup-tip { background: var(--surface-1); }
+  .leaflet-popup-close-button { color: var(--muted) !important; }
+  .star-btn {
+    font: inherit; font-size: 13px;
+    padding: 6px 11px;
+    border-radius: 7px;
+    border: 1px solid var(--border);
+    background: var(--page);
+    color: var(--text-primary);
+    cursor: pointer;
+  }
+  .star-btn:hover { border-color: var(--muted); }
+  .popup-link {
+    font-size: 13px; padding: 6px 11px;
+    border-radius: 7px; border: 1px solid var(--border);
+    color: var(--text-secondary); text-decoration: none;
+  }
+  .popup-link:hover { color: var(--text-primary); }
+  .tip-star { color: var(--text-primary); font-weight: 650; }
+  .star-cell {
+    font-size: 15px; line-height: 1;
+    background: none; border: none; cursor: pointer;
+    padding: 2px 4px; border-radius: 5px;
+    color: var(--text-secondary);
+  }
+  .star-cell:hover { background: var(--page); }
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 13px;
+    padding: 5px 11px 5px 9px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: var(--page);
+    color: var(--text-secondary);
+    cursor: pointer;
+    user-select: none;
+    transition: opacity .12s;
+  }
+  .chip .dot {
+    width: 11px; height: 11px;
+    border-radius: 50%;
+    flex: none;
+    box-shadow: 0 0 0 2px var(--surface-1);
+  }
+  .chip .n { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 12px; }
+  .chip[aria-pressed="true"] { color: var(--text-primary); border-color: var(--muted); }
+  .chip[aria-pressed="false"] { opacity: .42; }
+  .chip[aria-pressed="false"] .dot { background: var(--muted) !important; }
+
+  main { flex: 1; min-height: 0; position: relative; }
+  #map { position: absolute; inset: 0; background: var(--gridline); }
+  #table-view {
+    position: absolute; inset: 0;
+    overflow: auto;
+    background: var(--surface-1);
+    display: none;
+    padding: 0 18px 18px;
+  }
+  body.show-table #map { visibility: hidden; }
+  body.show-table #table-view { display: block; }
+
+  table { border-collapse: collapse; width: 100%; font-size: 13px; }
+  thead th {
+    position: sticky; top: 0;
+    background: var(--surface-1);
+    text-align: right;
+    padding: 10px 8px;
+    border-bottom: 1px solid var(--muted);
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  tbody td { padding: 7px 8px; border-bottom: 1px solid var(--gridline); }
+  tbody tr:hover { background: var(--page); }
+  td.num { font-variant-numeric: tabular-nums; }
+  .swatch {
+    display: inline-block; width: 9px; height: 9px;
+    border-radius: 50%; margin-left: 6px; vertical-align: baseline;
+  }
+  a { color: inherit; }
+
+  /* Tooltip */
+  .leaflet-tooltip.tender-tip {
+    background: var(--surface-1);
+    color: var(--text-primary);
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    box-shadow: 0 6px 22px rgba(0,0,0,.16);
+    padding: 10px 12px;
+    font-family: inherit;
+    font-size: 13px;
+    line-height: 1.55;
+    /* Explicit width: Leaflet's tooltip is shrink-to-fit, so max-width alone
+       collapses the box into a narrow column once white-space is normal. */
+    width: 272px;
+    white-space: normal;
+    direction: rtl;
+    text-align: right;
+  }
+  .leaflet-tooltip.tender-tip::before { display: none; }
+  .tip-h { font-weight: 650; margin-bottom: 2px; }
+  .tip-type { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; color: var(--text-secondary); }
+  .tip-type .dot { width: 9px; height: 9px; border-radius: 50%; box-shadow: 0 0 0 2px var(--surface-1); }
+  .tip-row { color: var(--text-secondary); }
+  .tip-row b { color: var(--text-primary); font-weight: 600; }
+  /* Opening date is the headline fact on every point */
+  .tip-open {
+    margin: 2px 0 7px;
+    padding: 6px 9px;
+    border-radius: 7px;
+    background: var(--page);
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
+    font-size: 12px;
+  }
+  .tip-open b {
+    display: block;
+    color: var(--text-primary);
+    font-size: 15px;
+    font-weight: 650;
+    font-variant-numeric: tabular-nums;
+  }
+  .tip-note { margin-top: 6px; color: var(--muted); font-size: 12px; }
+  .tip-cta { margin-top: 6px; color: var(--muted); font-size: 12px; }
+
+  .empty {
+    position: absolute; inset: 0;
+    display: none; place-items: center;
+    color: var(--text-secondary); font-size: 14px;
+    pointer-events: none;
+  }
+  body.no-results .empty { display: grid; }
+
+  @media (max-width: 640px) {
+    header { padding: 12px 12px 0; }
+    h1 { font-size: 17px; }
+    #table-view { padding: 0 12px 12px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="titlebar">
+    <h1>מפת מכרזי רשות מקרקעי ישראל</h1>
+    <span class="meta">
+      מוצגים <b id="shown">0</b> מתוך <b id="total">0</b> מכרזים ·
+      עודכן <span id="generated"></span>
+    </span>
+  </div>
+
+  <div class="controls">
+    <input type="search" id="q" placeholder="חיפוש יישוב / מספר מכרז…" aria-label="חיפוש">
+
+    <details class="ms" id="purpose-ms">
+      <summary id="purpose-summary">ייעוד מכרז: הכל</summary>
+      <div class="ms-panel">
+        <div id="purpose-list"></div>
+        <div class="ms-actions">
+          <button type="button" data-act="all">בחר הכל</button>
+          <button type="button" data-act="none">נקה הכל</button>
+        </div>
+      </div>
+    </details>
+
+    <select id="region" aria-label="סינון לפי מרחב"><option value="">כל המרחבים</option></select>
+    <button class="btn" id="reset" type="button">אפס סינון</button>
+    <button class="btn" id="toggle-table" type="button" aria-pressed="false">תצוגת טבלה</button>
+  </div>
+
+  <div class="legend" id="legend" role="group" aria-label="סינון לפי סוג מכרז">
+    <span class="legend-label">סוג מכרז:</span>
+  </div>
+
+  <div class="syncbar" id="syncbar">
+    <span>⭐ סימנת <b id="star-count">0</b> מכרזים במעקב — כדי לקבל עליהם התראות בטלגרם יש לעדכן את <b>watchlist.json</b>.</span>
+    <span class="grow"></span>
+    <button class="btn" type="button" id="copy-stars">העתק JSON</button>
+    <a class="btn" id="edit-watchlist" href="#" target="_blank" rel="noopener">ערוך ב־GitHub ↗</a>
+  </div>
+</header>
+
+<main>
+  <div id="map"></div>
+  <div class="empty">אין מכרזים התואמים את הסינון</div>
+  <div id="table-view">
+    <table>
+      <thead>
+        <tr>
+          <th aria-label="מעקב">⭐</th>
+          <th>מכרז</th><th>סוג</th><th>מועד פתיחה</th><th>יישוב</th><th>מרחב</th>
+          <th>ייעוד</th><th>יח״ד</th><th>פרסום</th><th>מועד אחרון</th><th>דיוק מיקום</th>
+        </tr>
+      </thead>
+      <tbody id="tbody"></tbody>
+    </table>
+  </div>
+</main>
+
+<script src="vendor/leaflet.js"></script>
+<script>
+const DATA = __TENDER_DATA__;
+
+const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const colorFor = (slot) => css('--s' + (slot + 1));
+
+// ── state ────────────────────────────────────────────────────────────────────
+const active = new Set(DATA.legend.map(l => l.slot));            // סוג מכרז
+const activePurposes = new Set(DATA.purposes.map(p => p.name));  // ייעוד מכרז
+let query = '', regionFilter = '', onlyStarred = false;
+
+// ── starred tenders ──────────────────────────────────────────────────────────
+// watchlist.json in the repo is what the monitor actually reads; the browser
+// copy is the working set until you commit it.
+const STORE_KEY = 'rmi-lands-watchlist';
+const committed = new Set(DATA.watchlist.map(String));
+
+function loadStars() {
+  try {
+    const raw = localStorage.getItem(STORE_KEY);
+    if (raw) return new Set(JSON.parse(raw).map(String));
+  } catch (e) { /* storage blocked or corrupt — fall back to the committed set */ }
+  return new Set(committed);
+}
+const starred = loadStars();
+
+function saveStars() {
+  try { localStorage.setItem(STORE_KEY, JSON.stringify([...starred])); } catch (e) {}
+}
+
+const sameAsCommitted = () =>
+  starred.size === committed.size && [...starred].every(id => committed.has(id));
+
+function syncBar() {
+  document.body.classList.toggle('stars-dirty', !sameAsCommitted());
+  document.getElementById('star-count').textContent = starred.size;
+  const chip = document.getElementById('star-chip');
+  if (chip) chip.querySelector('.n').textContent = starred.size;
+}
+
+// ── map ──────────────────────────────────────────────────────────────────────
+// SVG rendering (not canvas): ~500 markers is well within its budget, and it
+// gives real DOM hit-testing for the hover tooltips.
+const map = L.map('map', { zoomControl: true }).setView([31.6, 35.0], 8);
+
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  maxZoom: 18,
+  attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+}).addTo(map);
+
+const layer = L.layerGroup().addTo(map);
+
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c =>
+  ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+
+// Parse the dd/mm/yyyy the scraper produces, so we can say how far off the
+// opening date is rather than just printing it.
+function parseDMY(s) {
+  const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(s || '');
+  return m ? new Date(+m[3], +m[2] - 1, +m[1]) : null;
+}
+
+function openingNote(dateStr) {
+  const d = parseDMY(dateStr);
+  if (!d) return '';
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const days = Math.round((d - today) / 86400000);
+  if (days === 0) return 'נפתח היום';
+  if (days === 1) return 'נפתח מחר';
+  if (days > 1) return `בעוד ${days} ימים`;
+  if (days === -1) return 'נפתח אתמול';
+  return `נפתח לפני ${Math.abs(days)} ימים`;
+}
+
+function tooltipHTML(p) {
+  const place = p.neighborhood ? `${p.settlement} — ${p.neighborhood}` : p.settlement;
+  const note = openingNote(p.open_date);
+
+  const rows = [
+    `<div class="tip-row">יישוב: <b>${esc(place)}</b></div>`,
+    `<div class="tip-row">מרחב: <b>${esc(p.region)}</b></div>`,
+    `<div class="tip-row">ייעוד: <b>${esc(p.purpose || '—')}</b></div>`,
+    `<div class="tip-row">יחידות דיור: <b>${p.units || '—'}</b></div>`,
+    `<div class="tip-row">תאריך פרסום: <b>${esc(p.pub_date || '—')}</b></div>`,
+  ];
+  if (p.close_date) rows.push(`<div class="tip-row">מועד אחרון להגשה: <b>${esc(p.close_date)}</b></div>`);
+  rows.push(`<div class="tip-row">${p.booklet ? 'פורסמה חוברת' : 'טרם פורסמה חוברת'}${p.online ? ' · מקוון' : ''}</div>`);
+
+  const precisionNote = p.precision === 'exact' ? ''
+    : `<div class="tip-note">⚠ ${esc(p.precision_label)}</div>`;
+
+  const starLine = starred.has(String(p.id))
+    ? '<div class="tip-star">⭐ במעקב</div>' : '';
+
+  return `<div class="tip-h">מכרז ${esc(p.number)}</div>
+    <div class="tip-type"><span class="dot" style="background:${colorFor(p.slot)}"></span>${esc(p.type)}</div>
+    ${starLine}
+    <div class="tip-open">מועד פתיחת המכרז<b>${esc(p.open_date || '—')}</b>${note ? esc(note) : ''}</div>
+    ${rows.join('')}${precisionNote}
+    <div class="tip-cta">לחצו לסימון במעקב ולפתיחת המכרז</div>`;
+}
+
+function popupHTML(p) {
+  const on = starred.has(String(p.id));
+  return `<div class="tip-h">מכרז ${esc(p.number)}</div>
+    <div class="tip-type"><span class="dot" style="background:${colorFor(p.slot)}"></span>${esc(p.type)}</div>
+    <div class="tip-open">מועד פתיחת המכרז<b>${esc(p.open_date || '—')}</b>${esc(openingNote(p.open_date))}</div>
+    <div class="tip-row">${esc(p.neighborhood ? p.settlement + ' — ' + p.neighborhood : p.settlement)}</div>
+    <div class="popup-actions">
+      <button class="star-btn" type="button" data-star="${esc(p.id)}">
+        ${on ? '⭐ הסר ממעקב' : '☆ הוסף למעקב'}
+      </button>
+      <a class="popup-link" href="${esc(p.url)}" target="_blank" rel="noopener">אתר רמ"י ↗</a>
+    </div>`;
+}
+
+function visible() {
+  const q = query.trim().toLowerCase();
+  return DATA.points.filter(p =>
+    (!onlyStarred || starred.has(String(p.id))) &&
+    active.has(p.slot) &&
+    activePurposes.has(p.purpose || '—') &&
+    (!regionFilter || p.region === regionFilter) &&
+    (!q || p.settlement.toLowerCase().includes(q)
+        || (p.neighborhood || '').toLowerCase().includes(q)
+        || String(p.number).toLowerCase().includes(q))
+  );
+}
+
+// Starred marks are ringed in ink rather than a hue — color is already spoken
+// for by tender type, so the star must not read as an eighth category.
+function markerStyle(p) {
+  const on = starred.has(String(p.id));
+  return {
+    radius: on ? 9 : 7,
+    fillColor: colorFor(p.slot),
+    fillOpacity: p.precision === 'exact' ? 0.95 : 0.55,
+    color: on ? css('--text-primary') : css('--surface-1'),
+    weight: on ? 3 : 2,
+    dashArray: p.precision === 'exact' ? null : '2,2',
+  };
+}
+
+const markerById = new Map();
+
+function render() {
+  const pts = visible();
+  layer.clearLayers();
+  markerById.clear();
+
+  for (const p of pts) {
+    const marker = L.circleMarker([p.lat, p.lon], { ...markerStyle(p), interactive: true })
+      // 'auto' flips the tooltip side by side of the map, so points near the
+      // top edge don't render clipped off-screen.
+      .bindTooltip(tooltipHTML(p), { className: 'tender-tip', sticky: true, direction: 'auto', offset: [6, 0] })
+      .bindPopup(popupHTML(p))
+      .addTo(layer);
+    marker._tender = p;
+    markerById.set(String(p.id), marker);
+  }
+
+  document.getElementById('shown').textContent = pts.length;
+  document.body.classList.toggle('no-results', pts.length === 0);
+  renderTable(pts);
+}
+
+function toggleStar(id) {
+  id = String(id);
+  if (starred.has(id)) starred.delete(id); else starred.add(id);
+  saveStars();
+  syncBar();
+
+  const marker = markerById.get(id);
+  if (marker) {
+    marker.setStyle(markerStyle(marker._tender));
+    marker.setTooltipContent(tooltipHTML(marker._tender));
+    marker.setPopupContent(popupHTML(marker._tender));
+  }
+  if (onlyStarred) render(); else renderTable(visible());
+}
+
+// Popups and table rows are re-created constantly, so delegate the clicks.
+document.addEventListener('click', e => {
+  const btn = e.target.closest('[data-star]');
+  if (btn) { e.preventDefault(); toggleStar(btn.dataset.star); }
+});
+
+function renderTable(pts) {
+  const rows = pts.map(p => `<tr>
+      <td><button class="star-cell" type="button" data-star="${esc(p.id)}"
+                  title="${starred.has(String(p.id)) ? 'הסר ממעקב' : 'הוסף למעקב'}"
+                  aria-label="${starred.has(String(p.id)) ? 'הסר ממעקב' : 'הוסף למעקב'}"
+          >${starred.has(String(p.id)) ? '⭐' : '☆'}</button></td>
+      <td><a href="${esc(p.url)}" target="_blank" rel="noopener">${esc(p.number)}</a></td>
+      <td><span class="swatch" style="background:${colorFor(p.slot)}"></span>${esc(p.type)}</td>
+      <td class="num">${esc(p.open_date || '—')}</td>
+      <td>${esc(p.neighborhood ? p.settlement + ' — ' + p.neighborhood : p.settlement)}</td>
+      <td>${esc(p.region)}</td>
+      <td>${esc(p.purpose || '—')}</td>
+      <td class="num">${p.units || '—'}</td>
+      <td class="num">${esc(p.pub_date || '—')}</td>
+      <td class="num">${esc(p.close_date || '—')}</td>
+      <td>${esc(p.precision_label)}</td>
+    </tr>`);
+  document.getElementById('tbody').innerHTML = rows.join('');
+}
+
+// ── legend doubles as the type filter ────────────────────────────────────────
+const legendEl = document.getElementById('legend');
+for (const item of DATA.legend) {
+  const chip = document.createElement('button');
+  chip.type = 'button';
+  chip.className = 'chip';
+  chip.setAttribute('aria-pressed', 'true');
+  chip.innerHTML = `<span class="dot" style="background:${item.light}"></span>
+                    <span>${esc(item.name)}</span><span class="n">${item.count}</span>`;
+  chip.addEventListener('click', () => {
+    const on = chip.getAttribute('aria-pressed') === 'true';
+    chip.setAttribute('aria-pressed', String(!on));
+    if (on) active.delete(item.slot); else active.add(item.slot);
+    render();
+  });
+  chip.querySelector('.dot').style.background = colorFor(item.slot);
+  legendEl.appendChild(chip);
+}
+
+// "starred only" sits with the filters but is not a type — no color swatch.
+const starChip = document.createElement('button');
+starChip.type = 'button';
+starChip.id = 'star-chip';
+starChip.className = 'chip star';
+starChip.setAttribute('aria-pressed', 'false');
+starChip.innerHTML = `<span>⭐ במעקב בלבד</span><span class="n">0</span>`;
+starChip.addEventListener('click', () => {
+  onlyStarred = !onlyStarred;
+  starChip.setAttribute('aria-pressed', String(onlyStarred));
+  render();
+});
+legendEl.appendChild(starChip);
+
+// ── other controls ───────────────────────────────────────────────────────────
+const regionSel = document.getElementById('region');
+for (const r of [...new Set(DATA.points.map(p => p.region))].filter(Boolean).sort()) {
+  const o = document.createElement('option');
+  o.value = o.textContent = r;
+  regionSel.appendChild(o);
+}
+regionSel.addEventListener('change', e => { regionFilter = e.target.value; render(); });
+
+// ── ייעוד מכרז multi-select ──────────────────────────────────────────────────
+const purposeList = document.getElementById('purpose-list');
+const purposeSummary = document.getElementById('purpose-summary');
+const purposeMs = document.getElementById('purpose-ms');
+
+for (const item of DATA.purposes) {
+  const label = document.createElement('label');
+  label.innerHTML = `<input type="checkbox" checked value="${esc(item.name)}">
+                     <span>${esc(item.name)}</span><span class="n">${item.count}</span>`;
+  label.querySelector('input').addEventListener('change', e => {
+    if (e.target.checked) activePurposes.add(item.name); else activePurposes.delete(item.name);
+    syncPurposeSummary();
+    render();
+  });
+  purposeList.appendChild(label);
+}
+
+function syncPurposeSummary() {
+  const n = activePurposes.size, all = DATA.purposes.length;
+  purposeSummary.textContent =
+    n === all ? 'ייעוד מכרז: הכל'
+    : n === 0 ? 'ייעוד מכרז: אף אחד'
+    : n === 1 ? `ייעוד: ${[...activePurposes][0]}`
+    : `ייעוד מכרז: ${n} מתוך ${all}`;
+}
+
+function setAllPurposes(on) {
+  activePurposes.clear();
+  if (on) DATA.purposes.forEach(p => activePurposes.add(p.name));
+  purposeList.querySelectorAll('input').forEach(i => { i.checked = on; });
+  syncPurposeSummary();
+}
+
+purposeMs.querySelectorAll('.ms-actions button').forEach(b =>
+  b.addEventListener('click', () => { setAllPurposes(b.dataset.act === 'all'); render(); }));
+
+// Click-away closes the popover
+document.addEventListener('click', e => {
+  if (purposeMs.open && !purposeMs.contains(e.target)) purposeMs.open = false;
+});
+
+let t;
+document.getElementById('q').addEventListener('input', e => {
+  clearTimeout(t);
+  t = setTimeout(() => { query = e.target.value; render(); }, 150);
+});
+
+document.getElementById('reset').addEventListener('click', () => {
+  active.clear();
+  DATA.legend.forEach(l => active.add(l.slot));
+  legendEl.querySelectorAll('.chip:not(.star)').forEach(c => c.setAttribute('aria-pressed', 'true'));
+  onlyStarred = false;
+  starChip.setAttribute('aria-pressed', 'false');
+  setAllPurposes(true);
+  regionFilter = ''; regionSel.value = '';
+  query = ''; document.getElementById('q').value = '';
+  render();
+});
+
+const tableBtn = document.getElementById('toggle-table');
+tableBtn.addEventListener('click', () => {
+  const on = document.body.classList.toggle('show-table');
+  tableBtn.setAttribute('aria-pressed', String(on));
+  if (!on) map.invalidateSize();
+});
+
+// Re-tint marks when the OS theme flips (the palette has its own dark steps).
+window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+  legendEl.querySelectorAll('.chip').forEach((c, i) => {
+    c.querySelector('.dot').style.background = colorFor(DATA.legend[i].slot);
+  });
+  render();
+});
+
+// ── sync stars back into watchlist.json ──────────────────────────────────────
+const watchlistJSON = () =>
+  JSON.stringify({ ids: [...starred].sort() }, null, 2) + '\n';
+
+document.getElementById('edit-watchlist').href = DATA.watchlistEditUrl;
+
+document.getElementById('copy-stars').addEventListener('click', async (e) => {
+  const btn = e.currentTarget;
+  try {
+    await navigator.clipboard.writeText(watchlistJSON());
+    btn.textContent = 'הועתק ✓';
+  } catch (err) {
+    // Clipboard is blocked over file:// and without a user gesture — show the
+    // JSON so it can still be copied by hand.
+    window.prompt('העתיקו את התוכן אל watchlist.json:', watchlistJSON());
+    btn.textContent = 'העתק JSON';
+    return;
+  }
+  setTimeout(() => { btn.textContent = 'העתק JSON'; }, 1800);
+});
+
+document.getElementById('total').textContent = DATA.total;
+document.getElementById('generated').textContent = DATA.generated;
+syncPurposeSummary();
+syncBar();
+render();
+</script>
+</body>
+</html>

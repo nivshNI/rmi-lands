@@ -32,6 +32,76 @@ def build_notification(added: list[dict], removed_ids: list[str],
     return title, plain, html
 
 
+def build_watch_notification(updated: list[dict], watched_removed: list[str]) -> tuple[str, str, str]:
+    """
+    Returns (title, plain_text, html_text) for changes on starred tenders.
+    """
+    count = len(updated) + len(watched_removed)
+    title = f"⭐ עדכון במכרזים במעקב — {count} מכרזים"
+
+    lines = ["חלו שינויים במכרזים שסימנת במעקב:", ""]
+    for item in updated:
+        t = item["tender"]
+        location = t["settlement"]
+        if t["neighborhood"]:
+            location += f', {t["neighborhood"]}'
+        lines.append(f'⭐ מכרז {t["number"]} | {t["type"]}')
+        lines.append(f"  {location}")
+        for c in item["changes"]:
+            lines.append(f'  • {c["label"]}: {c["before"]} ← {c["after"]}')
+        lines.append("")
+
+    if watched_removed:
+        lines.append(f"הוסרו מהאתר {len(watched_removed)} מכרזים שהיו במעקב.")
+
+    plain = "\n".join(lines)
+    return title, plain, _build_watch_html(updated, watched_removed)
+
+
+def _build_watch_html(updated: list[dict], watched_removed: list[str]) -> str:
+    blocks = ""
+    for item in updated:
+        t = item["tender"]
+        location = t["settlement"]
+        if t["neighborhood"]:
+            location += f', {t["neighborhood"]}'
+        rows = "".join(
+            f'<tr>'
+            f'<td style="padding:6px 10px;border:1px solid #ddd">{c["label"]}</td>'
+            f'<td style="padding:6px 10px;border:1px solid #ddd;color:#888">{c["before"]}</td>'
+            f'<td style="padding:6px 10px;border:1px solid #ddd;font-weight:bold">{c["after"]}</td>'
+            f"</tr>"
+            for c in item["changes"]
+        )
+        blocks += f"""
+        <div style="margin-bottom:22px">
+            <h3 style="margin:0 0 4px">⭐ מכרז {t["number"]} — {t["type"]}</h3>
+            <p style="margin:0 0 8px;color:#555">{location} · {t["region"]}</p>
+            <table style="border-collapse:collapse;font-size:14px">
+                <thead><tr style="background:#f0f0f0">
+                    <th style="padding:6px 10px;border:1px solid #ddd">שדה</th>
+                    <th style="padding:6px 10px;border:1px solid #ddd">לפני</th>
+                    <th style="padding:6px 10px;border:1px solid #ddd">אחרי</th>
+                </tr></thead>
+                <tbody>{rows}</tbody>
+            </table>
+        </div>"""
+
+    removed_note = ""
+    if watched_removed:
+        removed_note = (
+            f'<p style="color:#888">הוסרו מהאתר {len(watched_removed)} מכרזים שהיו במעקב.</p>'
+        )
+
+    return f"""
+    <div dir="rtl" style="font-family:Arial,sans-serif;max-width:900px;margin:auto">
+        <h2 style="color:#b8860b">עדכון במכרזים במעקב</h2>
+        {blocks}
+        {removed_note}
+    </div>
+    """
+
+
 def _build_html(added: list[dict], removed_ids: list[str],
                 total_before: int, total_after: int) -> str:
     rows = ""

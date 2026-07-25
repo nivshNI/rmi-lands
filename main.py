@@ -17,10 +17,12 @@ import time
 from pathlib import Path
 from typing import Optional
 
+from build_map import build_map
 from config import Config
 from monitor import Snapshot, diff_snapshots, take_snapshot
 from notifier import notify
-from summarizer import build_notification
+from summarizer import build_notification, build_watch_notification
+from watchlist import load_watchlist
 
 # Stored in repo so baseline persists reliably across runs (no cache)
 BASELINE_FILE = Path(__file__).parent / "baseline.json"
@@ -49,6 +51,15 @@ def save_snapshot(snap: Snapshot) -> None:
     BASELINE_FILE.write_text(json.dumps(data, ensure_ascii=False))
 
 
+def refresh_map() -> None:
+    """Re-render docs/index.html so the map tracks the snapshot we just saved."""
+    try:
+        build_map()
+    except Exception:
+        # A map failure must never stop the monitor from notifying.
+        logger.exception("Failed to rebuild the map")
+
+
 def check_once() -> bool:
     logger.info("Checking RMI tenders (filter: Uchlusiya=%s)...", Config.RMI_UCHLUSIYA)
     try:
@@ -63,20 +74,24 @@ def check_once() -> bool:
 
     previous = load_previous_snapshot()
     save_snapshot(current)
+    refresh_map()
 
     if previous is None:
         logger.info("First run — baseline saved (%d tenders).", len(current.tenders))
         return False
 
-    changes = diff_snapshots(previous, current)
+    watched = load_watchlist()
+    changes = diff_snapshots(previous, current, watched_ids=watched)
 
-    if not changes["added"] and not changes["removed_ids"]:
+    if not any((changes["added"], changes["removed_ids"],
+                changes["updated"], changes["watched_removed"])):
         logger.info("No new tenders. Total: %d", len(current.tenders))
         return False
 
     logger.info(
-        "Changes detected! new=%d  removed=%d  total=%d",
-        len(changes["added"]), len(changes["removed_ids"]), len(current.tenders),
+        "Changes detected! new=%d  removed=%d  watched_updated=%d  total=%d",
+        len(changes["added"]), len(changes["removed_ids"]),
+        len(changes["updated"]), len(current.tenders),
     )
 
     if changes["added"]:
@@ -85,6 +100,15 @@ def check_once() -> bool:
             removed_ids=changes["removed_ids"],
             total_before=changes["total_before"],
             total_after=changes["total_after"],
+        )
+        notify(title=title, message=plain, html_message=html)
+
+    # Starred tenders get their own alert, so a change on one you care about
+    # isn't buried inside a batch of unrelated new tenders.
+    if changes["updated"] or changes["watched_removed"]:
+        title, plain, html = build_watch_notification(
+            updated=changes["updated"],
+            watched_removed=changes["watched_removed"],
         )
         notify(title=title, message=plain, html_message=html)
 

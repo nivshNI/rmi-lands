@@ -31,6 +31,55 @@ python main.py --loop
 2. **Filter** — Applies your configured population filter (e.g. "אנשים עם מוגבלות")
 3. **Compare** — Diffs current tenders against saved snapshot
 4. **Notify** — Sends you an alert with full tender details if new ones appeared
+5. **Map** — Regenerates `docs/index.html` from the same snapshot
+
+## The Map
+
+Every run rebuilds an interactive map of all active tenders at `docs/index.html`.
+Serve it with GitHub Pages (**Settings → Pages → Deploy from branch → `/docs`**),
+or just open the file locally — Leaflet is vendored into `docs/vendor/`, so the
+only thing it fetches at runtime is the OpenStreetMap basemap.
+
+- **One dot per tender**, colored by tender type (`סוג המכרז`)
+- **Filters** for tender type, purpose (`ייעוד מכרז`), region, and free-text search
+- **Hover** any dot for full details, with the opening date shown up front
+- **Click** a dot to star it or open it on the RMI site
+- **Table view** lists the same filtered set, sortable by eye and copy-pasteable
+
+### Marker precision
+
+Tenders carry a settlement name, not coordinates, so the map geocodes them
+against a bundled dataset (`geo/settlements.json`, 1365 localities). Each marker
+declares how it was placed:
+
+| Tier | Meaning | Marker |
+|---|---|---|
+| `exact` | Matched a settlement point | Solid |
+| `approx` | Curated coordinate (regional councils, spelling variants) | Faded, dashed |
+| `region` | No settlement match — placed at the region centre | Faded, dashed |
+
+On the current snapshot that resolves to 398 exact, 74 approx, and 7 region-only
+(names like `לא ידוע` that identify no real place).
+
+## Watchlist (⭐)
+
+Star tenders to get a **separate Telegram/email alert whenever their details
+change** — opening date, closing date, booklet publication, unit count, purpose,
+and more — not just when new tenders appear.
+
+`watchlist.json` is what the monitor reads:
+
+```json
+{ "ids": ["20260167", "20210409"] }
+```
+
+The map page is static and cannot write to the repo, so starring works like this:
+
+1. Star tenders on the map (kept in your browser)
+2. A bar appears — hit **העתק JSON**, then **ערוך ב־GitHub**
+3. Paste, commit, done — the next run starts watching them
+
+To skip the map entirely, just edit `watchlist.json` by hand.
 
 ## Configuration (.env)
 

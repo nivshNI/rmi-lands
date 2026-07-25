@@ -36,6 +36,9 @@ class Config:
     # 4=בני מיעוטים, 16=בני מקום, 3=חסרי דיור
     RMI_UCHLUSIYA: list[int] = _parse_int_list(os.getenv("RMI_UCHLUSIYA", "1"))
 
+    # Public URL of the map — appended to every notification
+    MAP_URL: str = os.getenv("MAP_URL", "https://nivshni.github.io/rmi-lands/")
+
     # Optional: LLM summarization
     OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
     USE_LLM_SUMMARY: bool = os.getenv("USE_LLM_SUMMARY", "false").lower() == "true"
