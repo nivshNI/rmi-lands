@@ -405,8 +405,10 @@ const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v
 const colorFor = (slot) => css('--s' + (slot + 1));
 
 // ── state ────────────────────────────────────────────────────────────────────
-const active = new Set(DATA.legend.map(l => l.slot));            // סוג מכרז
-const activePurposes = new Set(DATA.purposes.map(p => p.name));  // ייעוד מכרז
+// The map opens on the default selection, not on everything — see
+// DEFAULT_TYPES / DEFAULT_PURPOSES in build_map.py.
+const active = new Set(DATA.defaults.slots);              // סוג מכרז
+const activePurposes = new Set(DATA.defaults.purposes);   // ייעוד מכרז
 let query = '', regionFilter = '', onlyStarred = false;
 
 // ── starred tenders ──────────────────────────────────────────────────────────
@@ -612,7 +614,7 @@ for (const item of DATA.legend) {
   const chip = document.createElement('button');
   chip.type = 'button';
   chip.className = 'chip';
-  chip.setAttribute('aria-pressed', 'true');
+  chip.setAttribute('aria-pressed', String(active.has(item.slot)));
   chip.innerHTML = `<span class="dot" style="background:${item.light}"></span>
                     <span>${esc(item.name)}</span><span class="n">${item.count}</span>`;
   chip.addEventListener('click', () => {
@@ -655,7 +657,8 @@ const purposeMs = document.getElementById('purpose-ms');
 
 for (const item of DATA.purposes) {
   const label = document.createElement('label');
-  label.innerHTML = `<input type="checkbox" checked value="${esc(item.name)}">
+  label.innerHTML = `<input type="checkbox" ${activePurposes.has(item.name) ? 'checked' : ''}
+                            value="${esc(item.name)}">
                      <span>${esc(item.name)}</span><span class="n">${item.count}</span>`;
   label.querySelector('input').addEventListener('change', e => {
     if (e.target.checked) activePurposes.add(item.name); else activePurposes.delete(item.name);
@@ -695,13 +698,20 @@ document.getElementById('q').addEventListener('input', e => {
   t = setTimeout(() => { query = e.target.value; render(); }, 150);
 });
 
+// "אפס סינון" returns to the default selection, not to "everything on".
 document.getElementById('reset').addEventListener('click', () => {
   active.clear();
-  DATA.legend.forEach(l => active.add(l.slot));
-  legendEl.querySelectorAll('.chip:not(.star)').forEach(c => c.setAttribute('aria-pressed', 'true'));
+  DATA.defaults.slots.forEach(s => active.add(s));
+  legendEl.querySelectorAll('.chip:not(.star)').forEach((c, i) =>
+    c.setAttribute('aria-pressed', String(active.has(DATA.legend[i].slot))));
   onlyStarred = false;
   starChip.setAttribute('aria-pressed', 'false');
-  setAllPurposes(true);
+
+  activePurposes.clear();
+  DATA.defaults.purposes.forEach(p => activePurposes.add(p));
+  purposeList.querySelectorAll('input').forEach(i => { i.checked = activePurposes.has(i.value); });
+  syncPurposeSummary();
+
   regionFilter = ''; regionSel.value = '';
   query = ''; document.getElementById('q').value = '';
   render();
