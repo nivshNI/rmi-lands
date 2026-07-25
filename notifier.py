@@ -19,14 +19,25 @@ logger = logging.getLogger(__name__)
 
 def notify(title: str, message: str, html_message: Optional[str] = None) -> None:
     backends = [b.strip().lower() for b in Config.NOTIFY_VIA.split(",")]
+
+    # Every alert links back to the map, so you can see the tender in context.
+    plain = f"{message}\n\n🗺 מפת המכרזים: {Config.MAP_URL}"
+    telegram_text = f"{message}\n\n[🗺 פתח את מפת המכרזים]({Config.MAP_URL})"
+    html = html_message
+    if html:
+        html += (
+            f'<p style="font-size:13px;margin-top:18px" dir="rtl">'
+            f'<a href="{Config.MAP_URL}">🗺 פתח את מפת המכרזים</a></p>'
+        )
+
     for backend in backends:
         try:
             if backend == "ntfy":
-                _send_ntfy(title, message)
+                _send_ntfy(title, plain)
             elif backend == "telegram":
-                _send_telegram(title, message)
+                _send_telegram(title, telegram_text)
             elif backend == "email":
-                _send_email(title, message, html_message)
+                _send_email(title, plain, html)
             else:
                 logger.warning("Unknown notification backend: %s", backend)
         except Exception:
