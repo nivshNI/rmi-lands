@@ -50,6 +50,11 @@ TYPE_ORDER = [
     "מכרז למגרש בלתי מסוים",
 ]
 
+# Filters the map opens with. Everything stays available — these are just the
+# starting selection, and "אפס סינון" returns here rather than to "show all".
+DEFAULT_TYPES = ["הרשמה והגרלה"]
+DEFAULT_PURPOSES = ["בנייה נמוכה/צמודת קרקע"]
+
 PRECISION_LABELS = {
     "exact": "מיקום היישוב",
     "approx": "מיקום מקורב",
@@ -122,6 +127,25 @@ def collect_points(tenders: list[dict]) -> list[dict]:
     return points
 
 
+def _defaults(types_present: list[int], purposes: list[dict]) -> dict:
+    """
+    Resolve the default selection against what this snapshot actually contains.
+    If a default no longer matches anything, fall back to selecting everything
+    in that dimension — an empty selection would open the map blank.
+    """
+    slots = [s for s in types_present if TYPE_ORDER[s] in DEFAULT_TYPES]
+    names = [p["name"] for p in purposes if p["name"] in DEFAULT_PURPOSES]
+
+    if not slots:
+        logger.warning("No tender matches DEFAULT_TYPES %s — starting with all types", DEFAULT_TYPES)
+        slots = list(types_present)
+    if not names:
+        logger.warning("No tender matches DEFAULT_PURPOSES %s — starting with all purposes", DEFAULT_PURPOSES)
+        names = [p["name"] for p in purposes]
+
+    return {"slots": slots, "purposes": names}
+
+
 def build_map(baseline_file: Path = BASELINE_FILE, output_file: Path = OUTPUT_FILE) -> Path:
     """Read the snapshot, render the map, return the written path."""
     data = json.loads(baseline_file.read_text(encoding="utf-8"))
@@ -154,6 +178,7 @@ def build_map(baseline_file: Path = BASELINE_FILE, output_file: Path = OUTPUT_FI
         "plotted": len(points),
         "legend": legend,
         "purposes": purposes,
+        "defaults": _defaults(types_present, purposes),
         "watchlist": sorted(load_watchlist()),
         "watchlistEditUrl": f"https://github.com/{REPO_SLUG}/edit/{REPO_BRANCH}/watchlist.json",
         "points": points,
